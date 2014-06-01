@@ -7,6 +7,10 @@
 #include <TinyXML.h>
 #include "utility/debug.h"
 
+// sample URLs
+// freegeoip.net/xml
+
+
 // These are the interrupt and control pins
 #define ADAFRUIT_CC3000_IRQ   3  // MUST be an interrupt pin!
 // These can be any two pins
@@ -23,6 +27,8 @@ SPI_CLOCK_DIVIDER);
 Adafruit_CC3000_Client client;
 TinyXML xml;
 unsigned char  xmlbuf[XMLBUFLEN];
+char  url[256];
+char  *pServer, *pPage;
 
 const unsigned long
 dhcpTimeout     = 60L * 1000L, // Max time to wait for address from DHCP
@@ -32,10 +38,25 @@ responseTimeout = 15L * 1000L; // Max time to wait for data from server
 void setup(void)
 {
   uint32_t ip = 0L, t;
+  
   xml.init(xmlbuf,sizeof(xmlbuf),&XML_callback);
   Serial.begin(115200);
-  while ( !Serial.available() );
-  Serial.println(F("Hello, CC3000!\n")); 
+  while ( !Serial.dtr ( ) );
+  Serial.setTimeout ( 60000 );
+  Serial.println(F("Hello, CC3000!\nEnter a URL\n"));
+  Serial.readBytesUntil ( 13, url, sizeof(url) );
+  Serial.println ( url );
+  pPage = strstr ( url, "/" );
+  pServer = url;
+  if ( pPage )
+  {
+    *pPage = '\0';
+    pPage++;
+  }
+  Serial.print ( "Server: ");
+  Serial.println ( pServer );
+  Serial.print ( "Page:" );
+  if ( pPage ) Serial.println ( pPage );
 
   /* Try to reconnect using the details from SmartConfig          */
   /* This basically just resets the CC3000, and the auto connect  */
@@ -77,7 +98,7 @@ void setup(void)
   while((0L == ip) && ((millis() - t) < connectTimeout))
   {
     Serial.print ( "!" );
-    if(cc3000.getHostByName("freegeoip.net", &ip)) break;
+    if(cc3000.getHostByName( pServer, &ip)) break;
     Serial.print ( "." );
     delay(1000);
   }
@@ -98,7 +119,9 @@ void setup(void)
   if(client.connected())
   {
     Serial.print(F("connected.\r\nRequesting data..."));
-    client.print(F("GET /xml/ HTTP/1.0\r\nConnection: close\r\n\r\n"));
+    client.print(F("GET /"));
+    client.print(pPage);
+    client.print(F(" HTTP/1.0\r\nConnection: close\r\n\r\n"));
   }
   else
   {
@@ -203,5 +226,4 @@ void XML_callback( uint8_t statusflags, char* tagName,  uint16_t tagNameLen,  ch
     Serial.println(data);
   }
 }
-
 
