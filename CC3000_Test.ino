@@ -8,7 +8,8 @@
 #include "utility/debug.h"
 
 // sample URLs
-// freegeoip.net/xml
+// http://freegeoip.net/xml/
+// http://realtime.mbta.com/developer/api/v1/alertsbystop?api_key=wX9NwuHnZU2ToO7GmGR9uw&stop=2260
 
 
 // These are the interrupt and control pins
@@ -42,21 +43,6 @@ void setup(void)
   xml.init(xmlbuf,sizeof(xmlbuf),&XML_callback);
   Serial.begin(115200);
   while ( !Serial.dtr ( ) );
-  Serial.setTimeout ( 60000 );
-  Serial.println(F("Hello, CC3000!\nEnter a URL\n"));
-  Serial.readBytesUntil ( 13, url, sizeof(url) );
-  Serial.println ( url );
-  pPage = strstr ( url, "/" );
-  pServer = url;
-  if ( pPage )
-  {
-    *pPage = '\0';
-    pPage++;
-  }
-  Serial.print ( "Server: ");
-  Serial.println ( pServer );
-  Serial.print ( "Page:" );
-  if ( pPage ) Serial.println ( pPage );
 
   /* Try to reconnect using the details from SmartConfig          */
   /* This basically just resets the CC3000, and the auto connect  */
@@ -88,6 +74,30 @@ void setup(void)
   while (! displayConnectionDetails()) {
     delay(1000);
   }
+}
+
+void loop ( )
+{
+  uint32_t ip = 0L, t;
+  Serial.setTimeout ( 60000 );
+  Serial.println(F("Hello, CC3000!\nEnter a URL\n"));
+  Serial.readBytesUntil ( 13, url, sizeof(url) );
+  Serial.println ( url );
+
+  if ( strstr ( url, "http://" ) == url ) pServer = url+7;
+  else pServer = url;
+
+  pPage = strstr ( pServer, "/" );
+  if ( pPage )
+  {
+    *pPage = '\0';
+    pPage++;
+  }
+  Serial.print ( "Server: ");
+  Serial.println ( pServer );
+  Serial.print ( "Page:" );
+  if ( pPage ) Serial.println ( pPage );
+
   // Look up server's IP address
   Serial.println(F("\r\nGetting server IP address."));
   t = millis();
@@ -114,14 +124,19 @@ void setup(void)
   Serial.println();
 
   // Request XML-formatted data from server (port 80)
-  Serial.print(F("Connecting to geo server..."));
+  Serial.print(F("Connecting to " ) );
+  Serial.print(pServer);
+  Serial.print(F("..."));
   client = cc3000.connectTCP(ip, 80);
   if(client.connected())
   {
     Serial.print(F("connected.\r\nRequesting data..."));
     client.print(F("GET /"));
     client.print(pPage);
-    client.print(F(" HTTP/1.0\r\nConnection: close\r\n\r\n"));
+    client.print(F(" HTTP/1.1\r\nHost: "));
+    client.println ( pServer );
+    client.println ( F("Connection: close" ));
+    client.println ( "Accept: application/xml\r\n" );
   }
   else
   {
@@ -144,7 +159,7 @@ void setup(void)
     }
   }
   Serial.println("Waiting for response");
-  while (true)
+  while (client.connected())
   {
     if (client.available())
     {
@@ -153,6 +168,7 @@ void setup(void)
       xml.processChar(c);
     }
   }
+  Serial.print(F("Closing... "));
   client.close();
   Serial.println(F("OK"));
 
@@ -160,10 +176,6 @@ void setup(void)
   /* the next time your try to connect ... */
   Serial.println(F("\nDisconnecting"));
   cc3000.disconnect();
-}
-
-void loop ( )
-{
 }
 
 bool displayConnectionDetails(void) {
